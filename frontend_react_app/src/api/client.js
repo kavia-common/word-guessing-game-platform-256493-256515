@@ -1,4 +1,4 @@
- /**
+ /** 
   * Simple API client for the Word Guessing Game frontend.
   * BASE_URL defaults to http://localhost:3001/api, but can be overridden at runtime
   * via window.__API_BASE__ if it exists or via REACT_APP_API_BASE at build time.
@@ -17,9 +17,6 @@ const DEFAULT_BASE = 'http://localhost:3001/api';
  */
 function safeEnv(key) {
   try {
-    // In CRA (react-scripts) process.env is inlined at build time,
-    // but guard anyway to avoid "process is not defined" if executed
-    // in atypical environments.
     if (typeof process !== 'undefined' && process && process.env) {
       return process.env[key];
     }
@@ -37,7 +34,6 @@ function safeEnv(key) {
 function normalizeBaseEnsureApi(base) {
   if (!base) return '';
   let b = String(base).replace(/\/*$/, '');
-  // Ensure we include `/api` path segment exactly once.
   if (!/\/api$/.test(b)) {
     b = `${b}/api`;
   }
@@ -65,7 +61,6 @@ export function getApiBase() {
   try {
     if (typeof window !== 'undefined' && window.__API_BASE__) {
       const val = String(window.__API_BASE__);
-      // Accept either with or without /api and normalize to include /api.
       return /\/api\/?$/.test(val) ? normalizeBase(val) : normalizeBaseEnsureApi(val);
     }
   } catch (_) {
@@ -91,6 +86,27 @@ function withBase(path) {
   const base = getApiBase();
   const clean = String(path).replace(/^\/+/, '');
   return `${base}/${clean}`;
+}
+
+/**
+ * Centralized logger for request/response details to aid diagnostics.
+ * Avoids logging sensitive payloads; logs method, URL, and status only.
+ * @param {string} phase 'request' | 'response' | 'error'
+ * @param {object} info
+ */
+function logHttp(phase, info) {
+  try {
+    // eslint-disable-next-line no-console
+    if (phase === 'request') {
+      console.info('[api/client]', phase, info.method, info.url);
+    } else if (phase === 'response') {
+      console.info('[api/client]', phase, info.method, info.url, '->', info.status);
+    } else if (phase === 'error') {
+      console.warn('[api/client]', phase, info.method, info.url, '->', info.message, info.status ? `(status ${info.status})` : '');
+    }
+  } catch (_) {
+    // ignore
+  }
 }
 
 /**
@@ -156,32 +172,17 @@ Checklist:
  */
 async function doJson(url, options = {}) {
   const merged = {
-    // Start without headers to avoid forcing preflight unless needed
     ...options,
   };
   merged.headers = {
     Accept: 'application/json',
     ...(options.headers || {}),
   };
-  // Only set Content-Type for bodies we send; GETs without body won’t include it
   if (merged.body && !merged.headers['Content-Type']) {
     merged.headers['Content-Type'] = 'application/json';
   }
 
-  // Attach Supabase access token if available (for endpoints that accept JWT)
-  try {
-    // Dynamic import to avoid circular deps
-    const mod = await import('../context/AuthContext');
-    if (mod && typeof mod.useAuth === 'function') {
-      // Note: We cannot call hooks outside React. Instead, try reading token via window accessor set by index.js (optional),
-      // or fallback to reading from Supabase client directly if available.
-    }
-  } catch (_) {
-    // ignore
-  }
-
-  // Try get token from a window accessor first (set in index.js below).
-  // This ensures the Supabase access token (JWT) is attached to API calls when available.
+  // Attach Supabase access token if available (only when a session exists).
   if (typeof window !== 'undefined' && window.__getSupabaseAccessToken__) {
     try {
       const token = await window.__getSupabaseAccessToken__();
@@ -193,6 +194,8 @@ async function doJson(url, options = {}) {
     }
   }
 
+  logHttp('request', { method: merged.method || 'GET', url });
+
   let res;
   try {
     res = await fetch(url, merged);
@@ -200,6 +203,7 @@ async function doJson(url, options = {}) {
     const e = new Error(`Network error calling API: ${networkErr?.message || 'Failed to fetch'}`);
     e.code = 'NETWORK_ERROR';
     e.cause = networkErr;
+    logHttp('error', { method: merged.method || 'GET', url, message: e.message });
     throw e;
   }
 
@@ -212,8 +216,11 @@ async function doJson(url, options = {}) {
     error.status = res.status;
     error.data = data;
     error.code = 'HTTP_ERROR';
+    logHttp('error', { method: merged.method || 'GET', url, message, status: res.status });
     throw error;
   }
+
+  logHttp('response', { method: merged.method || 'GET', url, status: res.status });
   return data;
 }
 
