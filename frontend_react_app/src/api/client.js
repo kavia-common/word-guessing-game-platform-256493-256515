@@ -1,7 +1,7 @@
 /**
  * Simple API client for the Word Guessing Game frontend.
  * BASE_URL defaults to http://localhost:3001/api, but can be overridden at runtime
- * via window.__API_BASE__ if it exists.
+ * via window.__API_BASE__ if it exists or via REACT_APP_API_BASE at build time.
  */
 
 const DEFAULT_BASE = 'http://localhost:3001/api';
@@ -14,7 +14,11 @@ export function getApiBase() {
       return String(window.__API_BASE__);
     }
   } catch (_) {
-    // ignore
+    // ignore window access issues
+  }
+  // CRA build-time env
+  if (process?.env?.REACT_APP_API_BASE) {
+    return String(process.env.REACT_APP_API_BASE);
   }
   return DEFAULT_BASE;
 }

@@ -9,6 +9,10 @@
 - API base URL:
   - Defaults to `http://localhost:3001/api`
   - Can be overridden at runtime by defining `window.__API_BASE__ = "https://your-host/api"` before the app bundle is loaded.
+  - Or via build-time env: set `REACT_APP_API_BASE=https://your-host/api` in `.env`. Precedence:
+    1) `window.__API_BASE__` (runtime)
+    2) `process.env.REACT_APP_API_BASE` (build-time)
+    3) `http://localhost:3001/api` (default)
 
 - Endpoints expected by the client:
   - `POST /api/start-game`
