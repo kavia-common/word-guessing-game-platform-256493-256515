@@ -49,7 +49,11 @@ export default function Play() {
           navigate(`/results/${encodeURIComponent(sessionId)}`);
         }
       } catch (e) {
-        setErr(e?.message || 'Failed to load session.');
+        const details =
+          e?.code === 'NETWORK_ERROR'
+            ? `${e.message}. Verify backend is reachable and CORS allows this origin.`
+            : e?.message;
+        setErr(details || 'Failed to load session.');
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -80,7 +84,11 @@ export default function Play() {
         navigate(`/results/${encodeURIComponent(sessionId)}`);
       }
     } catch (error) {
-      setErr(error?.message || 'Failed to submit guess.');
+      const details =
+        error?.code === 'NETWORK_ERROR'
+          ? `${error.message}. Check API base, network connectivity, and CORS.`
+          : error?.message;
+      setErr(details || 'Failed to submit guess.');
     } finally {
       setLoading(false);
     }

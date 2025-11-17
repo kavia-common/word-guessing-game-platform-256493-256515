@@ -23,7 +23,11 @@ export default function Home() {
       }
       navigate(`/play/${encodeURIComponent(res.session_id)}`, { state: { meta: res } });
     } catch (error) {
-      setErr(error?.message || 'Failed to start game.');
+      const details =
+        error?.code === 'NETWORK_ERROR'
+          ? `${error.message}. Check API base and CORS settings.`
+          : error?.message;
+      setErr(details || 'Failed to start game.');
     } finally {
       setLoading(false);
     }

@@ -17,7 +17,11 @@ export default function Results() {
         const data = await apiGetSession(sessionId);
         setSession(data);
       } catch (e) {
-        setErr(e?.message || 'Failed to load results.');
+        const details =
+          e?.code === 'NETWORK_ERROR'
+            ? `${e.message}. Verify API base and CORS configuration.`
+            : e?.message;
+        setErr(details || 'Failed to load results.');
       }
     })();
   }, [sessionId]);

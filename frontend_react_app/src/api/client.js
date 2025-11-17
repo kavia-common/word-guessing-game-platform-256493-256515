@@ -2,6 +2,9 @@
  * Simple API client for the Word Guessing Game frontend.
  * BASE_URL defaults to http://localhost:3001/api, but can be overridden at runtime
  * via window.__API_BASE__ if it exists or via REACT_APP_API_BASE at build time.
+ *
+ * Also performs a lightweight connectivity check to `${API_BASE}/health` at module load
+ * to help diagnose "Failed to fetch" errors early.
  */
 
 const DEFAULT_BASE = 'http://localhost:3001/api';
@@ -26,6 +29,15 @@ function safeEnv(key) {
   return undefined;
 }
 
+/**
+ * Normalize an API base by removing trailing slashes.
+ * @param {string} base
+ */
+function normalizeBase(base) {
+  if (!base) return '';
+  return String(base).replace(/\/+$/, '');
+}
+
 // PUBLIC_INTERFACE
 export function getApiBase() {
   /**
@@ -37,7 +49,7 @@ export function getApiBase() {
    */
   try {
     if (typeof window !== 'undefined' && window.__API_BASE__) {
-      return String(window.__API_BASE__);
+      return normalizeBase(String(window.__API_BASE__));
     }
   } catch (_) {
     // ignore window access issues
@@ -45,12 +57,35 @@ export function getApiBase() {
 
   const fromEnv = safeEnv('REACT_APP_API_BASE');
   if (fromEnv) {
-    return String(fromEnv);
+    return normalizeBase(String(fromEnv));
   }
 
-  return DEFAULT_BASE;
+  return normalizeBase(DEFAULT_BASE);
 }
 
+/**
+ * Log the resolved API base and try a quick GET /health to verify connectivity.
+ * This runs once at module import time.
+ */
+(async function logAndProbeApiBase() {
+  const base = getApiBase();
+  // eslint-disable-next-line no-console
+  console.info('[api/client] Resolved API_BASE =', base);
+  try {
+    const res = await fetch(`${base}/health`, { method: 'GET' });
+    // eslint-disable-next-line no-console
+    console.info('[api/client] Health check', res.ok ? 'OK' : `FAILED (${res.status})`);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[api/client] Health check failed to fetch:', err?.message || err);
+  }
+})();
+
+/**
+ * Centralized JSON fetch with better network error surfacing.
+ * Ensures JSON content-type by default and parses response body.
+ * Converts network errors into a standardized Error with .code = 'NETWORK_ERROR'.
+ */
 async function doJson(url, options = {}) {
   const merged = {
     headers: {
@@ -59,7 +94,19 @@ async function doJson(url, options = {}) {
     },
     ...options,
   };
-  const res = await fetch(url, merged);
+
+  let res;
+  try {
+    res = await fetch(url, merged);
+  } catch (networkErr) {
+    const e = new Error(
+      `Network error calling API: ${networkErr?.message || 'Failed to fetch'}`
+    );
+    e.code = 'NETWORK_ERROR';
+    e.cause = networkErr;
+    throw e;
+  }
+
   const isJson = (res.headers.get('content-type') || '').includes('application/json');
   const data = isJson ? await res.json().catch(() => ({})) : await res.text();
 
