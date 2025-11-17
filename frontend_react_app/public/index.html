@@ -3,15 +3,13 @@
   <head>
     <meta charset="utf-8" />
     <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <meta name="theme-color" content="#8a1e2e" />
-    <meta name="description" content="Word Guessing Game - React Frontend" />
-    <title>Word Guessing Game</title>
-    <!-- Runtime configuration: can be edited post-build to set API base and Supabase keys -->
-    <script src="%PUBLIC_URL%/runtime-config.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Word Guess</title>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
+    <!-- Load runtime config BEFORE the app bundle so window.__API_BASE__ is available -->
+    <script src="%PUBLIC_URL%/runtime-config.js"></script>
   </body>
 </html>

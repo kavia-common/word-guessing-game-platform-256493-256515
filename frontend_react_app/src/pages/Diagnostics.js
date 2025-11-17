@@ -116,7 +116,7 @@ export default function Diagnostics() {
   return (
     <section className="card">
       <h1 className="title">Diagnostics</h1>
-      <p className="subtitle">Connectivity details for troubleshooting.</p>
+      <p className="subtitle">Connectivity details for troubleshooting (probes both /health and /health/).</p>
 
       <div className="meta">
         <span>Resolved API base: <strong>{apiBase || '-'}</strong></span>

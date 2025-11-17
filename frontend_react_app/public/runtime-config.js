@@ -1,33 +1,37 @@
 (function () {
   /**
-   * PUBLIC_INTERFACE
-   * Runtime configuration for the frontend application.
-   * This file is loaded before the React bundle and can set global values that the app reads:
-   *  - window.__API_BASE__           e.g. "https://your-backend.example.com:3001/api"
-   *  - window.__SUPABASE_URL__       e.g. "https://your-project.supabase.co"
-   *  - window.__SUPABASE_ANON_KEY__  e.g. "public-anon-key"
-   *  - window.__SITE_URL__           e.g. window.location.origin
+   * Runtime configuration for the frontend.
+   * This file is loaded by index.html before the React bundle.
+   * It allows setting deployment-specific values without rebuilding.
    *
-   * Notes:
-   * - Do not commit secrets; anon key is public by design for Supabase client usage.
-   * - Ensure API_BASE includes the exact backend origin and the /api prefix.
-   * - If frontend and backend are on different origins, backend CORS must allow the frontend origin and include "Authorization" in allowed headers.
+   * IMPORTANT:
+   * - Use the exact backend origin and include "/api" for API base.
+   * - Ensure protocol (https) matches the frontend to avoid mixed-content.
+   * - If you change the backend host/port, update it here.
+   *
+   * You can also set Supabase config here if using authentication:
+   *   window.__SUPABASE_URL__ = "https://your-project.supabase.co";
+   *   window.__SUPABASE_ANON_KEY__ = "your-public-anon-key";
+   *   window.__SITE_URL__ = window.location.origin; // used for email redirect
    */
 
-  // Example: uncomment and set exact values for your deployment
-  // window.__API_BASE__ = "https://vscode-internal-13306-beta.beta01.cloud.kavia.ai:3001/api";
-  // window.__SUPABASE_URL__ = "https://your-project.supabase.co";
-  // window.__SUPABASE_ANON_KEY__ = "your-public-anon-key";
-  // window.__SITE_URL__ = window.location.origin;
-
   try {
-    var fOrigin = window.location ? (window.location.protocol + "//" + window.location.host) : "(unknown)";
+    var frontendOrigin = window.location.protocol + '//' + window.location.host;
+
+    // Set the API base to the running backend's HTTPS origin and include /api
+    // Adjust host/port if backend changes in your environment.
+    window.__API_BASE__ = "https://vscode-internal-13306-beta.beta01.cloud.kavia.ai:3001/api";
+
+    // Optional: set the SITE URL for auth redirects if Supabase is used.
+    window.__SITE_URL__ = frontendOrigin;
+
     // eslint-disable-next-line no-console
     console.info(
-      "[runtime-config] Frontend origin =", fOrigin,
-      "| window.__API_BASE__ =", (typeof window.__API_BASE__ !== "undefined" ? window.__API_BASE__ : "(unset)")
+      "[runtime-config] Frontend origin =", frontendOrigin,
+      "| API_BASE =", window.__API_BASE__ || "(unset)"
     );
-  } catch (_) {
-    // ignore
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.warn("[runtime-config] Unable to set runtime variables:", e && e.message ? e.message : e);
   }
 })();
