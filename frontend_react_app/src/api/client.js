@@ -1,292 +1,77 @@
- /** 
-  * Simple API client for the Word Guessing Game frontend.
-  * BASE_URL defaults to http://localhost:3001/api, but can be overridden at runtime
-  * via window.__API_BASE__ if it exists or via REACT_APP_API_BASE at build time.
-  *
-  * Also performs a lightweight connectivity check to `${API_BASE}/health` at module load
-  * to help diagnose "Failed to fetch" errors early.
-  */
-
-const DEFAULT_BASE = 'http://localhost:3001/api';
-
 /**
- * Safely read a value from process.env in CRA builds without throwing in browsers
- * where "process" might not exist under certain bundlers or execution contexts.
- * @param {string} key environment variable name (e.g., 'REACT_APP_API_BASE')
- * @returns {string|undefined}
+ * Lightweight API client with robust base URL resolution.
+ *
+ * Order of resolution:
+ * 1. REACT_APP_API_BASE env var (recommended)
+ * 2. If current host ends with .kavia.ai and uses port 3000, switch to port 3001 with same scheme/host
+ * 3. Fallback to http://localhost:3001
+ *
+ * All requests are made to paths relative to '/api'.
+ *
+ * PUBLIC_INTERFACE
+ * getHealth(): Promise<{ message: string }>
  */
-function safeEnv(key) {
-  try {
-    if (typeof process !== 'undefined' && process && process.env) {
-      return process.env[key];
+const detectBase = () => {
+  // 1) Environment variable
+  const envBase = process.env.REACT_APP_API_BASE;
+  if (envBase && typeof envBase === 'string') {
+    return envBase.replace(/\/+$/, '');
+  }
+
+  // 2) Infer from window.location for preview environments
+  if (typeof window !== 'undefined' && window.location) {
+    try {
+      const { protocol, hostname } = window.location;
+      // If served at 3000 we assume backend at 3001 on same host
+      const backend = `${protocol}//${hostname}:3001`;
+      return backend;
+    } catch {
+      // fallthrough to default
     }
-  } catch (_) {
-    // ignore
   }
-  return undefined;
-}
+
+  // 3) Local fallback
+  return 'http://localhost:3001';
+};
+
+const API_BASE = detectBase();
 
 /**
- * Normalize an API base by removing trailing slashes and ensuring `/api` prefix exists.
- * @param {string} base
- * @returns {string}
+ * PUBLIC_INTERFACE
+ * Perform a JSON fetch to the backend under /api.
+ * @param {string} path - path under /api, e.g. '/health/' or '/start-game'
+ * @param {RequestInit} [options]
+ * @returns {Promise<any>}
  */
-function normalizeBaseEnsureApi(base) {
-  if (!base) return '';
-  let b = String(base).replace(/\/*$/, '');
-  if (!/\/api$/.test(b)) {
-    b = `${b}/api`;
-  }
-  return b;
-}
-
-/**
- * Normalize without forcing /api; used to detect if user already passed /api.
- * @param {string} base
- */
-function normalizeBase(base) {
-  if (!base) return '';
-  return String(base).replace(/\/*$/, '');
-}
-
-// PUBLIC_INTERFACE
-export function getApiBase() {
-  /**
-   * Returns the effective API base URL (including `/api`).
-   * Precedence:
-   * 1) window.__API_BASE__ (runtime override) — may be with or without `/api`
-   * 2) process.env.REACT_APP_API_BASE (build-time for CRA) — may be with or without `/api`
-   * 3) DEFAULT_BASE
-   */
-  try {
-    if (typeof window !== 'undefined' && window.__API_BASE__) {
-      const val = String(window.__API_BASE__);
-      return /\/api\/?$/.test(val) ? normalizeBase(val) : normalizeBaseEnsureApi(val);
-    }
-  } catch (_) {
-    // ignore window access issues
-  }
-
-  const fromEnv = safeEnv('REACT_APP_API_BASE');
-  if (fromEnv) {
-    const val = String(fromEnv);
-    return /\/api\/?$/.test(val) ? normalizeBase(val) : normalizeBaseEnsureApi(val);
-  }
-
-  return normalizeBase(DEFAULT_BASE);
-}
-
-/**
- * Compose a full URL from a path (with or without leading slash) using the API base.
- * Guarantees a single slash between base and path.
- * @param {string} path
- * @returns {string}
- */
-function withBase(path) {
-  const base = getApiBase();
-  const clean = String(path).replace(/^\/+/, '');
-  // Mixed content guardrail (log only): if frontend is HTTPS and API_BASE is not HTTPS, warn.
-  try {
-    if (typeof window !== 'undefined' && window.location) {
-      const isFrontendHttps = window.location.protocol === 'https:';
-      const baseUrl = new URL(base);
-      if (isFrontendHttps && baseUrl.protocol !== 'https:') {
-        // eslint-disable-next-line no-console
-        console.warn('[api/client] Mixed-content risk: Frontend is HTTPS but API_BASE is not HTTPS.', {
-          frontend: `${window.location.protocol}//${window.location.host}`,
-          apiBase: base,
-        });
-      }
-    }
-  } catch (_) {
-    // ignore URL parsing issues
-  }
-  return `${base}/${clean}`;
-}
-
-/**
- * Centralized logger for request/response details to aid diagnostics.
- * Avoids logging sensitive payloads; logs method, URL, and status only.
- * @param {string} phase 'request' | 'response' | 'error'
- * @param {object} info
- */
-function logHttp(phase, info) {
-  try {
-    // eslint-disable-next-line no-console
-    if (phase === 'request') {
-      console.info('[api/client]', phase, info.method, info.url);
-    } else if (phase === 'response') {
-      console.info('[api/client]', phase, info.method, info.url, '->', info.status);
-    } else if (phase === 'error') {
-      console.warn('[api/client]', phase, info.method, info.url, '->', info.message, info.status ? `(status ${info.status})` : '');
-    }
-  } catch (_) {
-    // ignore
-  }
-}
-
-/**
- * Log the resolved API base and try a quick GET /health to verify connectivity.
- * This runs once at module import time.
- */
-(async function logAndProbeApiBase() {
-  const base = getApiBase();
-  const frontendOrigin =
-    typeof window !== 'undefined' && window.location
-      ? `${window.location.protocol}//${window.location.host}`
-      : '(frontend-origin)';
-  // eslint-disable-next-line no-console
-  console.info('[api/client] Resolved API_BASE =', base, '| Frontend origin =', frontendOrigin);
-
-  // Probe both /health and /health/ to handle backends requiring trailing slashes (Django default)
-  const url1 = withBase('/health');
-  const url2 = withBase('/health/');
-  try {
-    // eslint-disable-next-line no-console
-    console.info('[api/client] Probing health (no slash):', url1);
-    let res = await fetch(url1, { method: 'GET', headers: { Accept: 'application/json' } });
-
-    if (!res.ok) {
-      // eslint-disable-next-line no-console
-      console.warn(`[api/client] Health (no slash) returned ${res.status}. Retrying with trailing slash: ${url2}`);
-      const res2 = await fetch(url2, { method: 'GET', headers: { Accept: 'application/json' } });
-      res = res2;
-    }
-
-    // eslint-disable-next-line no-console
-    console.info(
-      '[api/client] Health check result:',
-      res.ok ? `OK (${res.status})` : `FAILED (${res.status})`,
-      '| URL =',
-      res?.url || '(n/a)'
-    );
-  } catch (err) {
-    // eslint-disable-next-line no-console
-    console.error('[api/client] Health check failed to fetch:', err?.message || err);
-    // Provide CORS/Origin guidance with exact values and full URLs tested
-    console.error(
-      `[api/client] Connectivity hint:
-- Frontend origin: ${frontendOrigin}
-- API base (target): ${base}
-- Probed URLs: 
-  1) ${url1}
-  2) ${url2}
-Checklist:
-1) Ensure window.__API_BASE__ is set to the EXACT backend origin INCLUDING protocol, port, and /api.
-2) Django CORS: CORS_ALLOWED_ORIGINS must include "${frontendOrigin}" and CSRF_TRUSTED_ORIGINS may be required.
-3) If using Authorization header, ensure django-cors-headers allows Authorization in Access-Control-Allow-Headers.
-4) Avoid mixed content: if frontend is HTTPS, backend must be HTTPS too.`
-    );
-  }
-})();
-
-/**
- * Centralized JSON fetch with better network error surfacing.
- * Ensures JSON content-type by default and parses response body.
- * Converts network errors into a standardized Error with .code = 'NETWORK_ERROR'.
- * Surfaces HTTP errors distinctly with .status and .data.
- */
-async function doJson(url, options = {}) {
-  const merged = {
-    ...options,
-  };
-  merged.headers = {
-    Accept: 'application/json',
+export async function apiFetch(path, options = {}) {
+  const url = `${API_BASE}/api${path.startsWith('/') ? path : `/${path}`}`;
+  const headers = {
+    'Content-Type': 'application/json',
     ...(options.headers || {}),
   };
-  if (merged.body && !merged.headers['Content-Type']) {
-    merged.headers['Content-Type'] = 'application/json';
+  const resp = await fetch(url, { ...options, headers, credentials: 'include' });
+  const contentType = resp.headers.get('content-type') || '';
+  const isJSON = contentType.includes('application/json');
+  const body = isJSON ? await resp.json().catch(() => null) : await resp.text();
+  if (!resp.ok) {
+    const err = new Error(`API error ${resp.status}`);
+    err.status = resp.status;
+    err.body = body;
+    throw err;
   }
-
-  // Attach Supabase access token if available (only when a session exists).
-  if (typeof window !== 'undefined' && window.__getSupabaseAccessToken__) {
-    try {
-      const token = await window.__getSupabaseAccessToken__();
-      if (token) {
-        merged.headers = { ...(merged.headers || {}), Authorization: `Bearer ${token}` };
-      }
-    } catch (_) {
-      // ignore token errors
-    }
-  }
-
-  logHttp('request', { method: merged.method || 'GET', url });
-
-  let res;
-  try {
-    res = await fetch(url, merged);
-  } catch (networkErr) {
-    const e = new Error(`Network error calling API: ${networkErr?.message || 'Failed to fetch'}`);
-    e.code = 'NETWORK_ERROR';
-    e.cause = networkErr;
-    logHttp('error', { method: merged.method || 'GET', url, message: e.message });
-    throw e;
-  }
-
-  const isJson = (res.headers.get('content-type') || '').includes('application/json');
-  const data = isJson ? await res.json().catch(() => ({})) : await res.text();
-
-  if (!res.ok) {
-    const message = (isJson && data && (data.error || data.message)) || res.statusText || 'Request failed';
-    const error = new Error(message);
-    error.status = res.status;
-    error.data = data;
-    error.code = 'HTTP_ERROR';
-    logHttp('error', { method: merged.method || 'GET', url, message, status: res.status });
-    throw error;
-  }
-
-  logHttp('response', { method: merged.method || 'GET', url, status: res.status });
-  return data;
+  return body;
 }
 
-// PUBLIC_INTERFACE
-export async function apiStartGame(playerName) {
-  /**
-   * Starts a new game session.
-   * @param {string|undefined} playerName Optional player name.
-   * @returns {Promise<{session_id:string, word_length:number, max_attempts:number}>}
-   */
-  const body = playerName ? { player_name: String(playerName) } : {};
-  return doJson(withBase('/start-game'), {
-    method: 'POST',
-    body: JSON.stringify(body),
-  });
+/**
+ * PUBLIC_INTERFACE
+ * Health check convenience call
+ */
+export function getHealth() {
+  // Note: backend health endpoint is '/health/' (with trailing slash)
+  return apiFetch('/health/', { method: 'GET' });
 }
 
-// PUBLIC_INTERFACE
-export async function apiSubmitGuess(sessionId, guess) {
-  /**
-   * Submits a guess to the backend.
-   * @param {string} sessionId
-   * @param {string} guess
-   * @returns {Promise<{feedback:Array<'correct'|'present'|'absent'>, attempts:number, max_attempts:number, status:string}>}
-   */
-  return doJson(withBase('/guess'), {
-    method: 'POST',
-    body: JSON.stringify({ session_id: String(sessionId), guess: String(guess) }),
-  });
-}
-
-// PUBLIC_INTERFACE
-export async function apiGetSession(sessionId) {
-  /**
-   * Gets session details including current status and past attempts.
-   * @param {string} sessionId
-   * @returns {Promise<any>}
-   */
-  return doJson(withBase(`/session/${encodeURIComponent(sessionId)}`), {
-    method: 'GET',
-  });
-}
-
-// PUBLIC_INTERFACE
-export async function apiGetLeaderboard() {
-  /**
-   * Gets leaderboard entries.
-   * @returns {Promise<Array<{player_name:string, attempts:number, duration:number, finished_at:string}>>}
-   */
-  return doJson(withBase('/leaderboard'), {
-    method: 'GET',
-  });
-}
+export default {
+  apiFetch,
+  getHealth,
+};
