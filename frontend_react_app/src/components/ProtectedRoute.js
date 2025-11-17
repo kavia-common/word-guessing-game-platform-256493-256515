@@ -22,10 +22,8 @@ export default function ProtectedRoute({ children }) {
     );
   }
 
-  // If auth isn't configured, allow access (do not block routes)
-  if (!supabaseConfigured) {
-    return children;
-  }
+  // Always require authentication for protected routes regardless of Supabase configuration.
+  // If Supabase is not configured, user will effectively be unauthenticated and redirected to /signin.
 
   // If configured but user is not authenticated, redirect to signin and preserve location
   if (!user) {
