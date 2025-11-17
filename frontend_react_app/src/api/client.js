@@ -1,11 +1,11 @@
-/**
- * Simple API client for the Word Guessing Game frontend.
- * BASE_URL defaults to http://localhost:3001/api, but can be overridden at runtime
- * via window.__API_BASE__ if it exists or via REACT_APP_API_BASE at build time.
- *
- * Also performs a lightweight connectivity check to `${API_BASE}/health` at module load
- * to help diagnose "Failed to fetch" errors early.
- */
+ /**
+  * Simple API client for the Word Guessing Game frontend.
+  * BASE_URL defaults to http://localhost:3001/api, but can be overridden at runtime
+  * via window.__API_BASE__ if it exists or via REACT_APP_API_BASE at build time.
+  *
+  * Also performs a lightweight connectivity check to `${API_BASE}/health` at module load
+  * to help diagnose "Failed to fetch" errors early.
+  */
 
 const DEFAULT_BASE = 'http://localhost:3001/api';
 
@@ -36,7 +36,7 @@ function safeEnv(key) {
  */
 function normalizeBaseEnsureApi(base) {
   if (!base) return '';
-  let b = String(base).replace(/\/+$/, '');
+  let b = String(base).replace(/\/*$/, '');
   // Ensure we include `/api` path segment exactly once.
   if (!/\/api$/.test(b)) {
     b = `${b}/api`;
@@ -50,7 +50,7 @@ function normalizeBaseEnsureApi(base) {
  */
 function normalizeBase(base) {
   if (!base) return '';
-  return String(base).replace(/\/+$/, '');
+  return String(base).replace(/\/*$/, '');
 }
 
 // PUBLIC_INTERFACE
@@ -99,8 +99,12 @@ function withBase(path) {
  */
 (async function logAndProbeApiBase() {
   const base = getApiBase();
+  const frontendOrigin =
+    typeof window !== 'undefined' && window.location
+      ? `${window.location.protocol}//${window.location.host}`
+      : '(frontend-origin)';
   // eslint-disable-next-line no-console
-  console.info('[api/client] Resolved API_BASE =', base);
+  console.info('[api/client] Resolved API_BASE =', base, '| Frontend origin =', frontendOrigin);
 
   // Probe both /health and /health/ to handle backends requiring trailing slashes (Django default)
   const url1 = withBase('/health');
@@ -108,40 +112,39 @@ function withBase(path) {
   try {
     // eslint-disable-next-line no-console
     console.info('[api/client] Probing health (no slash):', url1);
-    let res = await fetch(url1, { method: 'GET' });
+    let res = await fetch(url1, { method: 'GET', headers: { Accept: 'application/json' } });
 
     if (!res.ok) {
       // eslint-disable-next-line no-console
       console.warn(`[api/client] Health (no slash) returned ${res.status}. Retrying with trailing slash: ${url2}`);
-      const res2 = await fetch(url2, { method: 'GET' });
+      const res2 = await fetch(url2, { method: 'GET', headers: { Accept: 'application/json' } });
       res = res2;
     }
 
     // eslint-disable-next-line no-console
-    console.info('[api/client] Health check result:', res.ok ? `OK (${res.status})` : `FAILED (${res.status})`);
+    console.info(
+      '[api/client] Health check result:',
+      res.ok ? `OK (${res.status})` : `FAILED (${res.status})`,
+      '| URL =',
+      res?.url || '(n/a)'
+    );
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error('[api/client] Health check failed to fetch:', err?.message || err);
-    // If this is a TypeError from CORS/origin mismatch, surface guidance with explicit base
-    if (err && (err.name === 'TypeError' || err.code === 'NETWORK_ERROR')) {
-      const frontendOrigin = (typeof window !== 'undefined' && window.location)
-        ? `${window.location.protocol}//${window.location.host}`
-        : '(frontend-origin)';
-      console.error(
-        `[api/client] CORS/Origin hint:
+    // Provide CORS/Origin guidance with exact values and full URLs tested
+    console.error(
+      `[api/client] Connectivity hint:
 - Frontend origin: ${frontendOrigin}
 - API base (target): ${base}
-If these differ, ensure:
-1) Set window.__API_BASE__ to the EXACT backend origin INCLUDING port and /api before loading the app bundle.
-   Example:
-   <script>
-     window.__API_BASE__ = "https://vscode-internal-13306-beta.beta01.cloud.kavia.ai:3001/api";
-   </script>
-2) On the Django backend, CORS_ALLOWED_ORIGINS must include the exact frontend origin:
-   "${frontendOrigin}"
-3) Backend health endpoint exists at /api/health/ (note trailing slash).`
-      );
-    }
+- Probed URLs: 
+  1) ${url1}
+  2) ${url2}
+Checklist:
+1) Ensure window.__API_BASE__ is set to the EXACT backend origin INCLUDING protocol, port, and /api.
+2) Django CORS: CORS_ALLOWED_ORIGINS must include "${frontendOrigin}" and CSRF_TRUSTED_ORIGINS may be required.
+3) If using Authorization header, ensure django-cors-headers allows Authorization in Access-Control-Allow-Headers.
+4) Avoid mixed content: if frontend is HTTPS, backend must be HTTPS too.`
+    );
   }
 })();
 
@@ -153,12 +156,17 @@ If these differ, ensure:
  */
 async function doJson(url, options = {}) {
   const merged = {
-    headers: {
-      'Content-Type': 'application/json',
-      ...(options.headers || {}),
-    },
+    // Start without headers to avoid forcing preflight unless needed
     ...options,
   };
+  merged.headers = {
+    Accept: 'application/json',
+    ...(options.headers || {}),
+  };
+  // Only set Content-Type for bodies we send; GETs without body won’t include it
+  if (merged.body && !merged.headers['Content-Type']) {
+    merged.headers['Content-Type'] = 'application/json';
+  }
 
   // Attach Supabase access token if available (for endpoints that accept JWT)
   try {
@@ -189,9 +197,7 @@ async function doJson(url, options = {}) {
   try {
     res = await fetch(url, merged);
   } catch (networkErr) {
-    const e = new Error(
-      `Network error calling API: ${networkErr?.message || 'Failed to fetch'}`
-    );
+    const e = new Error(`Network error calling API: ${networkErr?.message || 'Failed to fetch'}`);
     e.code = 'NETWORK_ERROR';
     e.cause = networkErr;
     throw e;
@@ -201,8 +207,7 @@ async function doJson(url, options = {}) {
   const data = isJson ? await res.json().catch(() => ({})) : await res.text();
 
   if (!res.ok) {
-    const message =
-      (isJson && data && (data.error || data.message)) || res.statusText || 'Request failed';
+    const message = (isJson && data && (data.error || data.message)) || res.statusText || 'Request failed';
     const error = new Error(message);
     error.status = res.status;
     error.data = data;

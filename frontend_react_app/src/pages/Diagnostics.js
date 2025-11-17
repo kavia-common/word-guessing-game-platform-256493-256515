@@ -14,19 +14,25 @@ export default function Diagnostics() {
     setApiBase(base);
     (async () => {
       setProbe({ status: 'loading', message: 'Probing /health and /health/…' });
+      const url1 = `${base}/health`;
+      const url2 = `${base}/health/`;
       try {
-        const res1 = await fetch(`${base}/health`, { method: 'GET' });
+        // eslint-disable-next-line no-console
+        console.info('[diagnostics] Probing', url1, 'then', url2);
+        const res1 = await fetch(url1, { method: 'GET', headers: { Accept: 'application/json' } });
         if (res1.ok) {
-          setProbe({ status: 'ok', message: `OK (${res1.status}) at ${base}/health` });
+          setProbe({ status: 'ok', message: `OK (${res1.status}) at ${url1}` });
           return;
         }
-        const res2 = await fetch(`${base}/health/`, { method: 'GET' });
+        const res2 = await fetch(url2, { method: 'GET', headers: { Accept: 'application/json' } });
         if (res2.ok) {
-          setProbe({ status: 'ok', message: `OK (${res2.status}) at ${base}/health/` });
+          setProbe({ status: 'ok', message: `OK (${res2.status}) at ${url2}` });
           return;
         }
         setProbe({ status: 'fail', message: `HTTP ${res1.status} and then ${res2.status}` });
       } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error('[diagnostics] Health probes failed.', { url1, url2, error: e?.message || String(e) });
         setProbe({ status: 'error', message: e?.message || 'Failed to fetch (likely CORS/network).' });
       }
     })();
