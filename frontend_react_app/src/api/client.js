@@ -1,77 +1,160 @@
-/**
- * Lightweight API client with robust base URL resolution.
- *
- * Order of resolution:
- * 1. REACT_APP_API_BASE env var (recommended)
- * 2. If current host ends with .kavia.ai and uses port 3000, switch to port 3001 with same scheme/host
- * 3. Fallback to http://localhost:3001
- *
- * All requests are made to paths relative to '/api'.
- *
- * PUBLIC_INTERFACE
- * getHealth(): Promise<{ message: string }>
- */
-const detectBase = () => {
-  // 1) Environment variable
-  const envBase = process.env.REACT_APP_API_BASE;
-  if (envBase && typeof envBase === 'string') {
-    return envBase.replace(/\/+$/, '');
-  }
+ /**
+  * Lightweight API client with robust base URL resolution and CORS-friendly behavior.
+  *
+  * Base URL resolution precedence (highest to lowest):
+  * 1) window.__API_BASE__ (runtime override, recommended). Example: "https://host:3001/api"
+  * 2) process.env.REACT_APP_API_BASE (build-time). Example: "http://localhost:3001/api"
+  * 3) Infer from window.location: same host, port 3001, with /api appended
+  * 4) Fallback: "http://localhost:3001/api"
+  *
+  * All requests are made to paths relative to '/api'.
+  *
+  * Exports:
+  * - getApiBase(): string
+  * - apiFetch(path, options): Promise<any>
+  * - getHealth(): Promise<{ message: string }>
+  * - apiStartGame(playerName?): Promise<any>
+  * - apiSubmitGuess(sessionId, guess): Promise<any>
+  * - apiGetSession(sessionId): Promise<any>
+  * - apiGetLeaderboard(): Promise<any>
+  */
 
-  // 2) Infer from window.location for preview environments
-  if (typeof window !== 'undefined' && window.location) {
-    try {
-      const { protocol, hostname } = window.location;
-      // If served at 3000 we assume backend at 3001 on same host
-      const backend = `${protocol}//${hostname}:3001`;
-      return backend;
-    } catch {
-      // fallthrough to default
-    }
-  }
+ // PUBLIC_INTERFACE
+ export function getApiBase() {
+   /**
+    * Determine API base including /api. Ensures no trailing slash.
+    * Returns a string like "https://host:3001/api".
+    */
+   const normalize = (v) => (typeof v === 'string' ? v.replace(/\/*$/, '') : '');
 
-  // 3) Local fallback
-  return 'http://localhost:3001';
-};
+   // 1) runtime override
+   try {
+     if (typeof window !== 'undefined' && window.__API_BASE__) {
+       return normalize(window.__API_BASE__);
+     }
+   } catch (_) {
+     // ignore
+   }
 
-const API_BASE = detectBase();
+   // 2) build-time env
+   try {
+     const envBase = process?.env?.REACT_APP_API_BASE;
+     if (envBase) return normalize(envBase);
+   } catch (_) {
+     // ignore
+   }
 
-/**
- * PUBLIC_INTERFACE
- * Perform a JSON fetch to the backend under /api.
- * @param {string} path - path under /api, e.g. '/health/' or '/start-game'
- * @param {RequestInit} [options]
- * @returns {Promise<any>}
- */
-export async function apiFetch(path, options = {}) {
-  const url = `${API_BASE}/api${path.startsWith('/') ? path : `/${path}`}`;
-  const headers = {
-    'Content-Type': 'application/json',
-    ...(options.headers || {}),
-  };
-  const resp = await fetch(url, { ...options, headers, credentials: 'include' });
-  const contentType = resp.headers.get('content-type') || '';
-  const isJSON = contentType.includes('application/json');
-  const body = isJSON ? await resp.json().catch(() => null) : await resp.text();
-  if (!resp.ok) {
-    const err = new Error(`API error ${resp.status}`);
-    err.status = resp.status;
-    err.body = body;
-    throw err;
-  }
-  return body;
-}
+   // 3) infer from window.location -> :3001/api
+   try {
+     if (typeof window !== 'undefined' && window.location) {
+       const { protocol, hostname } = window.location;
+       return `${protocol}//${hostname}:3001/api`;
+     }
+   } catch (_) {
+     // ignore
+   }
 
-/**
- * PUBLIC_INTERFACE
- * Health check convenience call
- */
-export function getHealth() {
-  // Note: backend health endpoint is '/health/' (with trailing slash)
-  return apiFetch('/health/', { method: 'GET' });
-}
+   // 4) default
+   return 'http://localhost:3001/api';
+ }
 
-export default {
-  apiFetch,
-  getHealth,
-};
+ const API_BASE = getApiBase();
+
+ /**
+  * PUBLIC_INTERFACE
+  * Perform a JSON fetch to the backend under /api.
+  * - Adds credentials: 'include' to support cookie-based CSRF if needed.
+  * - Normalizes errors to distinguish NETWORK_ERROR vs HTTP_ERROR.
+  * @param {string} path - path under /api, e.g. '/health/' or '/start-game'
+  * @param {RequestInit} [options]
+  * @returns {Promise<any>}
+  */
+ export async function apiFetch(path, options = {}) {
+   const subPath = path.startsWith('/') ? path : `/${path}`;
+   const url = `${API_BASE}${subPath}`;
+   const headers = {
+     'Content-Type': 'application/json',
+     ...(options.headers || {}),
+   };
+
+   let resp;
+   try {
+     resp = await fetch(url, { ...options, headers, credentials: 'include' });
+   } catch (e) {
+     const err = new Error('Failed to fetch (network/CORS).');
+     err.code = 'NETWORK_ERROR';
+     err.cause = e;
+     throw err;
+   }
+
+   const contentType = resp.headers.get('content-type') || '';
+   const isJSON = contentType.includes('application/json');
+   const body = isJSON ? await resp.json().catch(() => null) : await resp.text();
+   if (!resp.ok) {
+     const err = new Error(`API error ${resp.status}`);
+     err.code = 'HTTP_ERROR';
+     err.status = resp.status;
+     err.body = body;
+     throw err;
+   }
+   return body;
+ }
+
+ /**
+  * PUBLIC_INTERFACE
+  * Health check convenience call
+  */
+ export function getHealth() {
+   // Accept trailing slash by default since Django often enforces it
+   return apiFetch('/health/', { method: 'GET' });
+ }
+
+ /**
+  * PUBLIC_INTERFACE
+  * Start a new game session.
+  * @param {string|undefined} playerName
+  */
+ export async function apiStartGame(playerName) {
+   const body = playerName ? { player_name: playerName } : {};
+   return apiFetch('/start-game', { method: 'POST', body: JSON.stringify(body) });
+ }
+
+ /**
+  * PUBLIC_INTERFACE
+  * Submit a guess for a given session.
+  * @param {string|number} sessionId
+  * @param {string} guess
+  */
+ export async function apiSubmitGuess(sessionId, guess) {
+   return apiFetch('/guess', {
+     method: 'POST',
+     body: JSON.stringify({ session_id: Number(sessionId), guess }),
+   });
+ }
+
+ /**
+  * PUBLIC_INTERFACE
+  * Fetch session details by ID.
+  * @param {string|number} sessionId
+  */
+ export async function apiGetSession(sessionId) {
+   return apiFetch(`/session/${encodeURIComponent(sessionId)}`, { method: 'GET' });
+ }
+
+ /**
+  * PUBLIC_INTERFACE
+  * Fetch leaderboard.
+  */
+ export async function apiGetLeaderboard() {
+   return apiFetch('/leaderboard', { method: 'GET' });
+ }
+
+ export default {
+   getApiBase,
+   apiFetch,
+   getHealth,
+   apiStartGame,
+   apiSubmitGuess,
+   apiGetSession,
+   apiGetLeaderboard,
+ };
