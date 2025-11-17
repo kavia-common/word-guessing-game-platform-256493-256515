@@ -19,6 +19,7 @@ export default function Layout({ children, theme, onToggleTheme }) {
           <nav className="nav-links">
             <Link className={`nav-link ${location.pathname === '/' ? 'active' : ''}`} to="/">Home</Link>
             <Link className={`nav-link ${location.pathname.startsWith('/leaderboard') ? 'active' : ''}`} to="/leaderboard">Leaderboard</Link>
+            <Link className={`nav-link ${location.pathname.startsWith('/diagnostics') ? 'active' : ''}`} to="/diagnostics">Diagnostics</Link>
           </nav>
           <button
             className="theme-toggle btn"

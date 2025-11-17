@@ -29,6 +29,18 @@
     // eslint-disable-next-line no-console
     console.info('[runtime-config] Backend API base (target):', window.__API_BASE__);
 
+    // Additional guidance: if the frontend runs on a different port than 3000 in local/preview,
+    // make sure CORS on the backend allows the exact origin.
+    try {
+      var fePort = (frontendOrigin.split(':')[2] || '').replace(/\\/.*/, '');
+      if (fePort && fePort !== '3000') {
+        // eslint-disable-next-line no-console
+        console.warn('[runtime-config] Frontend is not on port 3000. Ensure backend CORS allows:', frontendOrigin);
+      }
+    } catch (_) {
+      // ignore
+    }
+
   } catch (e) {
     // eslint-disable-next-line no-console
     console.error('[runtime-config] Failed to initialize runtime API base:', e && e.message ? e.message : e);

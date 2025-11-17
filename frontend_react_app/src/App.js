@@ -6,6 +6,7 @@ import Home from './pages/Home';
 import Play from './pages/Play';
 import Results from './pages/Results';
 import Leaderboard from './pages/Leaderboard';
+import Diagnostics from './pages/Diagnostics';
 
 // PUBLIC_INTERFACE
 function App() {
@@ -36,6 +37,7 @@ function App() {
           <Route path="/play/:sessionId" element={<Play />} />
           <Route path="/results/:sessionId" element={<Results />} />
           <Route path="/leaderboard" element={<Leaderboard />} />
+          <Route path="/diagnostics" element={<Diagnostics />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Layout>
