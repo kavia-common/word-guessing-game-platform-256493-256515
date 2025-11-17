@@ -101,17 +101,31 @@ function withBase(path) {
   const base = getApiBase();
   // eslint-disable-next-line no-console
   console.info('[api/client] Resolved API_BASE =', base);
+
+  // Probe /health then fallback to /health/ since backend exposes /api/health/
+  const url1 = withBase('/health');
+  const url2 = withBase('/health/');
   try {
-    const res = await fetch(withBase('/health'), { method: 'GET' });
     // eslint-disable-next-line no-console
-    console.info('[api/client] Health check', res.ok ? 'OK' : `FAILED (${res.status})`);
+    console.info('[api/client] Probing health:', url1);
+    let res = await fetch(url1, { method: 'GET' });
+
+    if (!res.ok) {
+      // eslint-disable-next-line no-console
+      console.warn(`[api/client] Health check first attempt FAILED (${res.status}). Retrying: ${url2}`);
+      const res2 = await fetch(url2, { method: 'GET' });
+      res = res2;
+    }
+
+    // eslint-disable-next-line no-console
+    console.info('[api/client] Health check', res.ok ? `OK (${res.status})` : `FAILED (${res.status})`);
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error('[api/client] Health check failed to fetch:', err?.message || err);
-    // If this is a TypeError from CORS/origin mismatch, surface guidance
+    // If this is a TypeError from CORS/origin mismatch, surface guidance with explicit base
     if (err && (err.name === 'TypeError' || err.code === 'NETWORK_ERROR')) {
       console.error(
-        '[api/client] Hint: If frontend and backend are on different origins, set window.__API_BASE__ to the exact backend origin (including protocol and port), e.g.: window.__API_BASE__="https://your-host:3001/api". Also verify CORS on backend allows this frontend origin.'
+        `[api/client] Hint: If frontend and backend are on different origins, define window.__API_BASE__ before the app bundle loads to the exact backend origin INCLUDING /api.\nExample:\n  <script>\n    window.__API_BASE__ = "${base || 'https://your-host:3001/api'}";\n  </script>\nAlso verify CORS on the backend allows this frontend origin.`
       );
     }
   }
