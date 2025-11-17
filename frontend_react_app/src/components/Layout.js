@@ -29,7 +29,13 @@ export default function Layout({ children, theme, onToggleTheme }) {
           <Link className="brand" to="/">Word Guess</Link>
           <nav className="nav-links">
             <Link className={`nav-link ${location.pathname === '/' ? 'active' : ''}`} to="/">Home</Link>
-            <Link className={`nav-link ${location.pathname.startsWith('/leaderboard') ? 'active' : ''}`} to="/leaderboard">Leaderboard</Link>
+            <Link
+              className={`nav-link ${location.pathname.startsWith('/leaderboard') ? 'active' : ''}`}
+              to="/leaderboard"
+              title="Requires sign in"
+            >
+              Leaderboard
+            </Link>
             <Link className={`nav-link ${location.pathname.startsWith('/diagnostics') ? 'active' : ''}`} to="/diagnostics">Diagnostics</Link>
             {supabaseConfigured && !user && (
               <>

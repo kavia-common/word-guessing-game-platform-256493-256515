@@ -10,6 +10,7 @@ import Diagnostics from './pages/Diagnostics';
 import SignIn from './pages/SignIn';
 import SignUp from './pages/SignUp';
 import { AuthProvider } from './context/AuthContext';
+import ProtectedRoute from './components/ProtectedRoute';
 
 // PUBLIC_INTERFACE
 function App() {
@@ -17,9 +18,9 @@ function App() {
    * Root application that sets up theming and client-side routing.
    * Routes:
    * - / -> Home
-   * - /play/:sessionId -> Play screen for an existing session
-   * - /results/:sessionId -> Results screen
-   * - /leaderboard -> Leaderboard screen
+   * - /play/:sessionId -> Play screen for an existing session (protected)
+   * - /results/:sessionId -> Results screen (protected)
+   * - /leaderboard -> Leaderboard screen (protected)
    * - /signin -> Sign In
    * - /signup -> Sign Up
    */
@@ -40,9 +41,30 @@ function App() {
         <Layout theme={theme} onToggleTheme={toggleTheme}>
           <Routes>
             <Route path="/" element={<Home />} />
-            <Route path="/play/:sessionId" element={<Play />} />
-            <Route path="/results/:sessionId" element={<Results />} />
-            <Route path="/leaderboard" element={<Leaderboard />} />
+            <Route
+              path="/play/:sessionId"
+              element={
+                <ProtectedRoute>
+                  <Play />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/results/:sessionId"
+              element={
+                <ProtectedRoute>
+                  <Results />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/leaderboard"
+              element={
+                <ProtectedRoute>
+                  <Leaderboard />
+                </ProtectedRoute>
+              }
+            />
             <Route path="/diagnostics" element={<Diagnostics />} />
             <Route path="/signin" element={<SignIn />} />
             <Route path="/signup" element={<SignUp />} />

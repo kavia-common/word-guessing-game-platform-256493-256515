@@ -172,7 +172,8 @@ async function doJson(url, options = {}) {
     // ignore
   }
 
-  // Try get token from a window accessor first (set in index.js below)
+  // Try get token from a window accessor first (set in index.js below).
+  // This ensures the Supabase access token (JWT) is attached to API calls when available.
   if (typeof window !== 'undefined' && window.__getSupabaseAccessToken__) {
     try {
       const token = await window.__getSupabaseAccessToken__();
