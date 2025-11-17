@@ -1,48 +1,45 @@
 import React, { useState, useEffect } from 'react';
-import logo from './logo.svg';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import './App.css';
+import Layout from './components/Layout';
+import Home from './pages/Home';
+import Play from './pages/Play';
+import Results from './pages/Results';
+import Leaderboard from './pages/Leaderboard';
 
 // PUBLIC_INTERFACE
 function App() {
+  /**
+   * Root application that sets up theming and client-side routing.
+   * Routes:
+   * - / -> Home
+   * - /play/:sessionId -> Play screen for an existing session
+   * - /results/:sessionId -> Results screen
+   * - /leaderboard -> Leaderboard screen
+   */
   const [theme, setTheme] = useState('light');
 
-  // Effect to apply theme to document element
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
   // PUBLIC_INTERFACE
   const toggleTheme = () => {
-    setTheme(prevTheme => prevTheme === 'light' ? 'dark' : 'light');
+    setTheme(prev => (prev === 'light' ? 'dark' : 'light'));
   };
 
   return (
-    <div className="App">
-      <header className="App-header">
-        <button 
-          className="theme-toggle" 
-          onClick={toggleTheme}
-          aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
-        >
-          {theme === 'light' ? '🌙 Dark' : '☀️ Light'}
-        </button>
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <p>
-          Current theme: <strong>{theme}</strong>
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
+    <BrowserRouter>
+      <Layout theme={theme} onToggleTheme={toggleTheme}>
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/play/:sessionId" element={<Play />} />
+          <Route path="/results/:sessionId" element={<Results />} />
+          <Route path="/leaderboard" element={<Leaderboard />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Layout>
+    </BrowserRouter>
   );
 }
 
