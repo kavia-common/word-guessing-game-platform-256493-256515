@@ -1,0 +1,4 @@
+{
+    "command": "npm run test",
+    "working_directory": "/home/kavia/workspace/code-generation/word-guessing-game-platform-256493-256515/frontend_react_app"
+}
