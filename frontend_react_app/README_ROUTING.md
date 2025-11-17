@@ -8,19 +8,20 @@
 
 - API base URL detection:
   - Default: `http://localhost:3001/api`
-  - Runtime override: define `window.__API_BASE__ = "https://your-host:3001/api"` before the app bundle is loaded. Example snippet to place before the app script:
+  - Runtime override (recommended for cross-origin deployments): define `window.__API_BASE__ = "https://your-host:3001/api"` before the app bundle is loaded. Example snippet to place before the app script:
     ```
     <script>
       // Use exact backend origin (protocol, host, port) and include /api
       window.__API_BASE__ = "https://vscode-internal-13306-beta.beta01.cloud.kavia.ai:3001/api";
     </script>
     ```
+    In this template, `public/runtime-config.js` is automatically included by `public/index.html` to set `window.__API_BASE__` at runtime and log both frontend and backend origins.
   - Build-time override: set `REACT_APP_API_BASE=https://your-host:3001/api` in `.env` (CRA inlines this on build).
   - Precedence:
     1) `window.__API_BASE__` (runtime, highest)
     2) `process.env.REACT_APP_API_BASE` (build-time)
     3) Default
-  - The client now normalizes either form (with or without `/api`) to ensure the final base includes `/api`.
+  - The client normalizes either form (with or without `/api`) to ensure the final base includes `/api`.
 
 - Connectivity diagnostics:
   - On startup, the client logs: `[api/client] Resolved API_BASE = ...`
