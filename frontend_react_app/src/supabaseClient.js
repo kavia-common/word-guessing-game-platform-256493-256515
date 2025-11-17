@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 
 /**
  * Supabase client initialization.
- * Reads credentials from runtime first (window.__SUPABASE_*) then from CRA env (REACT_APP_*).
+ * Reads credentials from runtime first (window.__SUPABASE_URL__/__SUPABASE_ANON_KEY__) then from CRA env (REACT_APP_*).
  * Never hardcode secrets; ensure they are provided via environment variables or runtime-config.
  */
 

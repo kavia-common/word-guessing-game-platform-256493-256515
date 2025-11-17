@@ -4,12 +4,12 @@ import { useAuth } from '../context/AuthContext';
 
 /**
  * ProtectedRoute enforces that a user is authenticated before accessing children.
- * - If Supabase is not configured, we currently allow access (to avoid blocking guest play in environments without auth).
- * - If Supabase is configured and the user is not signed in, redirect to /signin and preserve intended destination in state.
- * - While redirecting, optionally render a minimal UX hint.
+ * - If allowGuest is true, guests are allowed even when not authenticated.
+ * - If Supabase is configured and allowGuest is false, redirect unauthenticated users to /signin.
+ * - If Supabase is not configured and allowGuest is false, we still redirect to /signin to make intent explicit.
  */
 // PUBLIC_INTERFACE
-export default function ProtectedRoute({ children }) {
+export default function ProtectedRoute({ children, allowGuest = false }) {
   const { user, loading, supabaseConfigured } = useAuth() || {};
   const location = useLocation();
 
@@ -22,10 +22,12 @@ export default function ProtectedRoute({ children }) {
     );
   }
 
-  // Always require authentication for protected routes regardless of Supabase configuration.
-  // If Supabase is not configured, user will effectively be unauthenticated and redirected to /signin.
+  if (allowGuest) {
+    // Guest access permitted for this route (e.g., gameplay and results)
+    return children;
+  }
 
-  // If configured but user is not authenticated, redirect to signin and preserve location
+  // Require authentication. If missing, redirect to signin and preserve location
   if (!user) {
     return (
       <Navigate

@@ -1,27 +1,44 @@
 (function () {
-  // This file is intentionally simple and safe to include before the app bundle.
-  // You can override these values at deploy-time without rebuilding the app.
-
-  // PUBLIC_INTERFACE
-  // window.__API_BASE__: Backend API base INCLUDING /api, e.g. "https://your-host:3001/api"
-  // Leave undefined to let the client auto-detect (localhost:3001/api or preview host :3001/api).
-  window.__API_BASE__ = window.__API_BASE__ || undefined;
-
-  // PUBLIC_INTERFACE
-  // Supabase runtime configuration (optional)
-  window.__SUPABASE_URL__ = window.__SUPABASE_URL__ || undefined;
-  window.__SUPABASE_ANON_KEY__ = window.__SUPABASE_ANON_KEY__ || undefined;
-
-  // PUBLIC_INTERFACE
-  // Site URL used for auth email redirect
-  window.__SITE_URL__ = window.__SITE_URL__ || (typeof window !== 'undefined' ? window.location.origin : undefined);
-
-  // Log resolved origins to help during diagnostics
+  /**
+   * PUBLIC_INTERFACE
+   * Runtime configuration bridge for the frontend.
+   * You can set the following globals at deployment time without rebuilding:
+   * - window.__API_BASE__
+   * - window.__SUPABASE_URL__
+   * - window.__SUPABASE_ANON_KEY__
+   * - window.__SITE_URL__ (used for email redirect during sign-up)
+   *
+   * Example:
+   *   <script src="/runtime-config.js"></script>
+   *   <script>
+   *     window.__API_BASE__ = "https://your-backend:3001/api";
+   *     window.__SUPABASE_URL__ = "https://your-project.supabase.co";
+   *     window.__SUPABASE_ANON_KEY__ = "public-anon-key";
+   *     window.__SITE_URL__ = window.location.origin;
+   *   </script>
+   */
   try {
-    var frontendOrigin = window.location.protocol + '//' + window.location.host;
+    if (typeof window !== 'undefined') {
+      // Keep values as-is if already set by deployer; otherwise leave undefined.
+      window.__RUNTIME_CONFIG_LOADED__ = true;
+
+      // Minimal console hints for operators
+      // eslint-disable-next-line no-console
+      console.info(
+        '[runtime-config] Frontend origin:',
+        window.location ? `${window.location.protocol}//${window.location.host}` : '-'
+      );
+      if (window.__API_BASE__) {
+        // eslint-disable-next-line no-console
+        console.info('[runtime-config] API base set via runtime:', window.__API_BASE__);
+      }
+      if (window.__SUPABASE_URL__) {
+        // eslint-disable-next-line no-console
+        console.info('[runtime-config] Supabase URL is provided at runtime.');
+      }
+    }
+  } catch (e) {
     // eslint-disable-next-line no-console
-    console.info('[runtime-config] Frontend origin =', frontendOrigin, '| API_BASE =', window.__API_BASE__ || '(auto)');
-  } catch (_) {
-    // ignore
+    console.warn('[runtime-config] Unable to initialize runtime hints:', e && e.message);
   }
 })();

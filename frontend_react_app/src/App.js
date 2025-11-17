@@ -44,7 +44,7 @@ function App() {
             <Route
               path="/play/:sessionId"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute allowGuest>
                   <Play />
                 </ProtectedRoute>
               }
@@ -52,7 +52,7 @@ function App() {
             <Route
               path="/results/:sessionId"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute allowGuest>
                   <Results />
                 </ProtectedRoute>
               }

@@ -9,6 +9,10 @@
   *
   * All requests are made to paths relative to '/api'.
   *
+  * When authenticated via Supabase, this client attaches:
+  *   Authorization: Bearer <supabaseAccessToken>
+  * obtained via window.__getSupabaseAccessToken__().
+  *
   * Exports:
   * - getApiBase(): string
   * - apiFetch(path, options): Promise<any>
@@ -61,9 +65,28 @@
  const API_BASE = getApiBase();
 
  /**
+  * Attempt to resolve a Supabase access token via the global helper set in src/index.js.
+  * Returns empty object if unavailable or on error.
+  */
+ async function getAuthHeader() {
+   try {
+     if (typeof window !== 'undefined' && typeof window.__getSupabaseAccessToken__ === 'function') {
+       const token = await window.__getSupabaseAccessToken__();
+       if (token) {
+         return { Authorization: `Bearer ${token}` };
+       }
+     }
+   } catch (_) {
+     // ignore
+   }
+   return {};
+ }
+
+ /**
   * PUBLIC_INTERFACE
   * Perform a JSON fetch to the backend under /api.
   * - Adds credentials: 'include' to support cookie-based CSRF if needed.
+  * - Adds Authorization header with Supabase token when available.
   * - Normalizes errors to distinguish NETWORK_ERROR vs HTTP_ERROR.
   * @param {string} path - path under /api, e.g. '/health/' or '/start-game'
   * @param {RequestInit} [options]
@@ -72,8 +95,10 @@
  export async function apiFetch(path, options = {}) {
    const subPath = path.startsWith('/') ? path : `/${path}`;
    const url = `${API_BASE}${subPath}`;
+   const auth = await getAuthHeader();
    const headers = {
      'Content-Type': 'application/json',
+     ...auth,
      ...(options.headers || {}),
    };
 

@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { getApiBase } from '../api/client';
+import { getSupabaseClient } from '../supabaseClient';
 
 /**
  * Diagnostics page: shows resolved API base and a live health probe.
- * Useful to quickly verify backend reachability and CORS behavior.
+ * Also shows Supabase client configuration and current auth/session state.
+ * Useful to quickly verify backend reachability, CORS behavior, and auth.
  */
 export default function Diagnostics() {
   const [apiBase, setApiBase] = useState('');
@@ -21,6 +23,10 @@ export default function Diagnostics() {
     healthSlash: '',
   });
 
+  // Supabase diagnostics
+  const [sb, setSb] = useState({ configured: false, url: '', hasKey: false });
+  const [authState, setAuthState] = useState({ loading: true, userEmail: '', hasSession: false, tokenPreview: '' });
+
   useEffect(() => {
     const base = getApiBase();
     setApiBase(base);
@@ -34,7 +40,18 @@ export default function Diagnostics() {
     const url2 = `${base}/health/`;
     setResolved({ frontendOrigin, healthNoSlash: url1, healthSlash: url2 });
 
+    // Supabase check
+    const supabase = getSupabaseClient();
+    const runtimeUrl = (typeof window !== 'undefined' && window.__SUPABASE_URL__) || '';
+    const runtimeKey = (typeof window !== 'undefined' && window.__SUPABASE_ANON_KEY__) || '';
+    setSb({
+      configured: !!supabase,
+      url: runtimeUrl || (process?.env?.REACT_APP_SUPABASE_URL || ''),
+      hasKey: Boolean(runtimeKey || process?.env?.REACT_APP_SUPABASE_ANON_KEY),
+    });
+
     (async () => {
+      // Health probes
       setProbe({
         status: 'loading',
         message: 'Probing /health and /health/…',
@@ -68,50 +85,50 @@ export default function Diagnostics() {
               urlSlash: { url: url2, ok: null, status: null, error: '' },
             },
           });
-          return;
-        }
-        try {
-          res2 = await fetch(url2, { method: 'GET', headers: { Accept: 'application/json' } });
-        } catch (e2) {
-          setProbe(prev => ({
-            status: 'error',
-            message: e2?.message || 'Failed to fetch (likely CORS/network).',
-            details: {
-              urlNoSlash: {
-                url: url1,
-                ok: res1 ? res1.ok : false,
-                status: res1 ? res1.status : null,
-                error: res1 ? '' : (prev.details.urlNoSlash.error || 'Failed to fetch'),
+        } else {
+          try {
+            res2 = await fetch(url2, { method: 'GET', headers: { Accept: 'application/json' } });
+          } catch (e2) {
+            setProbe(prev => ({
+              status: 'error',
+              message: e2?.message || 'Failed to fetch (likely CORS/network).',
+              details: {
+                urlNoSlash: {
+                  url: url1,
+                  ok: res1 ? res1.ok : false,
+                  status: res1 ? res1.status : null,
+                  error: res1 ? '' : (prev.details.urlNoSlash.error || 'Failed to fetch'),
+                },
+                urlSlash: { url: url2, ok: false, status: null, error: e2?.message || String(e2) },
               },
-              urlSlash: { url: url2, ok: false, status: null, error: e2?.message || String(e2) },
-            },
-          }));
-          return;
-        }
-        if (res2 && res2.ok) {
-          setProbe({
-            status: 'ok',
-            message: `OK (${res2.status}) at ${url2}`,
-            details: {
-              urlNoSlash: {
-                url: url1,
-                ok: res1 ? res1.ok : false,
-                status: res1 ? res1.status : null,
-                error: res1 && !res1.ok ? `HTTP ${res1.status}` : (res1 ? '' : (''))
+            }));
+            return;
+          }
+          if (res2 && res2.ok) {
+            setProbe({
+              status: 'ok',
+              message: `OK (${res2.status}) at ${url2}`,
+              details: {
+                urlNoSlash: {
+                  url: url1,
+                  ok: res1 ? res1.ok : false,
+                  status: res1 ? res1.status : null,
+                  error: res1 && !res1.ok ? `HTTP ${res1.status}` : (res1 ? '' : (''))
+                },
+                urlSlash: { url: url2, ok: true, status: res2.status, error: '' },
               },
-              urlSlash: { url: url2, ok: true, status: res2.status, error: '' },
-            },
-          });
-          return;
+            });
+          } else {
+            setProbe({
+              status: 'fail',
+              message: `HTTP ${res1 ? res1.status : 'ERR'} and then ${res2 ? res2.status : 'ERR'}`,
+              details: {
+                urlNoSlash: { url: url1, ok: res1 ? res1.ok : false, status: res1 ? res1.status : null, error: res1 ? '' : 'Failed to fetch' },
+                urlSlash: { url: url2, ok: res2 ? res2.ok : false, status: res2 ? res2.status : null, error: res2 ? '' : 'Failed to fetch' },
+              },
+            });
+          }
         }
-        setProbe({
-          status: 'fail',
-          message: `HTTP ${res1 ? res1.status : 'ERR'} and then ${res2 ? res2.status : 'ERR'}`,
-          details: {
-            urlNoSlash: { url: url1, ok: res1 ? res1.ok : false, status: res1 ? res1.status : null, error: res1 ? '' : 'Failed to fetch' },
-            urlSlash: { url: url2, ok: res2 ? res2.ok : false, status: res2 ? res2.status : null, error: res2 ? '' : 'Failed to fetch' },
-          },
-        });
       } catch (e) {
         // eslint-disable-next-line no-console
         console.error('[diagnostics] Health probes failed.', { base, error: e?.message || String(e) });
@@ -121,6 +138,24 @@ export default function Diagnostics() {
           details: prev.details,
         }));
       }
+
+      // Auth inspection
+      try {
+        if (supabase) {
+          const { data } = await supabase.auth.getSession();
+          const token = data?.session?.access_token || '';
+          setAuthState({
+            loading: false,
+            userEmail: data?.session?.user?.email || '',
+            hasSession: !!data?.session,
+            tokenPreview: token ? `${token.substring(0, 8)}…${token.substring(token.length - 6)}` : '',
+          });
+        } else {
+          setAuthState({ loading: false, userEmail: '', hasSession: false, tokenPreview: '' });
+        }
+      } catch (e) {
+        setAuthState({ loading: false, userEmail: '', hasSession: false, tokenPreview: '' });
+      }
     })();
   }, []);
 
@@ -129,7 +164,7 @@ export default function Diagnostics() {
   return (
     <section className="card">
       <h1 className="title">Diagnostics</h1>
-      <p className="subtitle">Connectivity details for troubleshooting (probes both /health and /health/).</p>
+      <p className="subtitle">Connectivity and auth details for troubleshooting.</p>
 
       <div className="meta">
         <span>Resolved API base: <strong>{apiBase || '-'}</strong></span>
@@ -146,19 +181,15 @@ export default function Diagnostics() {
       {probe.status === 'fail' && <div className="alert error">Health failed: {probe.message}</div>}
       {probe.status === 'error' && <div className="alert error">{probe.message}</div>}
 
-      <div style={{ marginTop: 12 }}>
-        <div className="muted">Health probe details:</div>
-        <ul style={{ marginTop: 6 }}>
-          <li>
-            <code>{probe.details.urlNoSlash.url || '-'}</code> → {probe.details.urlNoSlash.ok === null ? '—' : (probe.details.urlNoSlash.ok ? 'OK' : 'FAIL')}
-            {probe.details.urlNoSlash.status ? ` (status ${probe.details.urlNoSlash.status})` : ''}
-            {probe.details.urlNoSlash.error ? ` — ${probe.details.urlNoSlash.error}` : ''}
-          </li>
-          <li>
-            <code>{probe.details.urlSlash.url || '-'}</code> → {probe.details.urlSlash.ok === null ? '—' : (probe.details.urlSlash.ok ? 'OK' : 'FAIL')}
-            {probe.details.urlSlash.status ? ` (status ${probe.details.urlSlash.status})` : ''}
-            {probe.details.urlSlash.error ? ` — ${probe.details.urlSlash.error}` : ''}
-          </li>
+      <div style={{ marginTop: 16 }}>
+        <h3 style={{ margin: 0 }}>Supabase</h3>
+        <ul className="muted" style={{ marginTop: 8 }}>
+          <li>Configured: <strong>{sb.configured ? 'yes' : 'no'}</strong></li>
+          <li>URL: <code>{sb.url || '-'}</code></li>
+          <li>Anon key present: <strong>{sb.hasKey ? 'yes' : 'no'}</strong></li>
+          <li>Session: <strong>{authState.loading ? 'checking…' : (authState.hasSession ? 'active' : 'none')}</strong></li>
+          <li>User email: <strong>{authState.userEmail || '-'}</strong></li>
+          <li>Token (preview): <code>{authState.tokenPreview || '-'}</code></li>
         </ul>
       </div>
 

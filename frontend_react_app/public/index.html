@@ -5,11 +5,11 @@
     <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Word Guess</title>
+    <!-- PUBLIC_INTERFACE: runtime config bridge (sets window.__API_BASE__, __SUPABASE_URL__, __SUPABASE_ANON_KEY__) -->
+    <script src="%PUBLIC_URL%/runtime-config.js"></script>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
-    <!-- Runtime configuration (override API base and Supabase without rebuild) -->
-    <script src="%PUBLIC_URL%/runtime-config.js"></script>
     <div id="root"></div>
   </body>
 </html>
