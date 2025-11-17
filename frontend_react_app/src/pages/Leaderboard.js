@@ -33,6 +33,9 @@ export default function Leaderboard() {
   return (
     <section className="card">
       <h1 className="title">Leaderboard</h1>
+      <p className="muted" style={{ marginTop: 0, marginBottom: 8 }}>
+        You can play as a guest. Sign in to have your scores recorded.
+      </p>
       {err && <div className="alert error">{err}</div>}
       {loading && <div className="skeleton">Loading...</div>}
 

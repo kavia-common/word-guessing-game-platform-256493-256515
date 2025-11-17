@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { apiStartGame } from '../api/client';
+import { useAuth } from '../context/AuthContext';
 
 /**
  * Home page: allows optional player name entry and starts a game.
@@ -10,6 +11,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
   const navigate = useNavigate();
+  const { user, supabaseConfigured } = useAuth() || {};
 
   async function handleStart(e) {
     e.preventDefault();
@@ -37,6 +39,11 @@ export default function Home() {
     <section className="card">
       <h1 className="title">Word Guessing Game</h1>
       <p className="subtitle">Try to guess the hidden word. You will get feedback after each guess.</p>
+      {supabaseConfigured && !user && (
+        <p className="muted" style={{ marginTop: 0 }}>
+          Optional: <Link to="/signin">Sign in</Link> to submit scores to the leaderboard.
+        </p>
+      )}
 
       <form className="form" onSubmit={handleStart}>
         <label htmlFor="playerName" className="label">Player name (optional)</label>

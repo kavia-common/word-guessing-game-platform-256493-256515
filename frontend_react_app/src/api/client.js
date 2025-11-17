@@ -160,6 +160,30 @@ async function doJson(url, options = {}) {
     ...options,
   };
 
+  // Attach Supabase access token if available (for endpoints that accept JWT)
+  try {
+    // Dynamic import to avoid circular deps
+    const mod = await import('../context/AuthContext');
+    if (mod && typeof mod.useAuth === 'function') {
+      // Note: We cannot call hooks outside React. Instead, try reading token via window accessor set by index.js (optional),
+      // or fallback to reading from Supabase client directly if available.
+    }
+  } catch (_) {
+    // ignore
+  }
+
+  // Try get token from a window accessor first (set in index.js below)
+  if (typeof window !== 'undefined' && window.__getSupabaseAccessToken__) {
+    try {
+      const token = await window.__getSupabaseAccessToken__();
+      if (token) {
+        merged.headers = { ...(merged.headers || {}), Authorization: `Bearer ${token}` };
+      }
+    } catch (_) {
+      // ignore token errors
+    }
+  }
+
   let res;
   try {
     res = await fetch(url, merged);
