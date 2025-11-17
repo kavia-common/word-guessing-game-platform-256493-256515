@@ -6,9 +6,35 @@
 
 const DEFAULT_BASE = 'http://localhost:3001/api';
 
+/**
+ * Safely read a value from process.env in CRA builds without throwing in browsers
+ * where "process" might not exist under certain bundlers or execution contexts.
+ * @param {string} key environment variable name (e.g., 'REACT_APP_API_BASE')
+ * @returns {string|undefined}
+ */
+function safeEnv(key) {
+  try {
+    // In CRA (react-scripts) process.env is inlined at build time,
+    // but guard anyway to avoid "process is not defined" if executed
+    // in atypical environments.
+    if (typeof process !== 'undefined' && process && process.env) {
+      return process.env[key];
+    }
+  } catch (_) {
+    // ignore
+  }
+  return undefined;
+}
+
 // PUBLIC_INTERFACE
 export function getApiBase() {
-  /** Returns the effective API base URL. */
+  /**
+   * Returns the effective API base URL.
+   * Precedence:
+   * 1) window.__API_BASE__ (runtime override)
+   * 2) process.env.REACT_APP_API_BASE (build-time for CRA)
+   * 3) DEFAULT_BASE
+   */
   try {
     if (typeof window !== 'undefined' && window.__API_BASE__) {
       return String(window.__API_BASE__);
@@ -16,10 +42,12 @@ export function getApiBase() {
   } catch (_) {
     // ignore window access issues
   }
-  // CRA build-time env
-  if (process?.env?.REACT_APP_API_BASE) {
-    return String(process.env.REACT_APP_API_BASE);
+
+  const fromEnv = safeEnv('REACT_APP_API_BASE');
+  if (fromEnv) {
+    return String(fromEnv);
   }
+
   return DEFAULT_BASE;
 }
 
