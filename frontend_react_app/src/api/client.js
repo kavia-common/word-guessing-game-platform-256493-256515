@@ -30,7 +30,22 @@ function safeEnv(key) {
 }
 
 /**
- * Normalize an API base by removing trailing slashes.
+ * Normalize an API base by removing trailing slashes and ensuring `/api` prefix exists.
+ * @param {string} base
+ * @returns {string}
+ */
+function normalizeBaseEnsureApi(base) {
+  if (!base) return '';
+  let b = String(base).replace(/\/+$/, '');
+  // Ensure we include `/api` path segment exactly once.
+  if (!/\/api$/.test(b)) {
+    b = `${b}/api`;
+  }
+  return b;
+}
+
+/**
+ * Normalize without forcing /api; used to detect if user already passed /api.
  * @param {string} base
  */
 function normalizeBase(base) {
@@ -41,15 +56,17 @@ function normalizeBase(base) {
 // PUBLIC_INTERFACE
 export function getApiBase() {
   /**
-   * Returns the effective API base URL.
+   * Returns the effective API base URL (including `/api`).
    * Precedence:
-   * 1) window.__API_BASE__ (runtime override)
-   * 2) process.env.REACT_APP_API_BASE (build-time for CRA)
+   * 1) window.__API_BASE__ (runtime override) — may be with or without `/api`
+   * 2) process.env.REACT_APP_API_BASE (build-time for CRA) — may be with or without `/api`
    * 3) DEFAULT_BASE
    */
   try {
     if (typeof window !== 'undefined' && window.__API_BASE__) {
-      return normalizeBase(String(window.__API_BASE__));
+      const val = String(window.__API_BASE__);
+      // Accept either with or without /api and normalize to include /api.
+      return /\/api\/?$/.test(val) ? normalizeBase(val) : normalizeBaseEnsureApi(val);
     }
   } catch (_) {
     // ignore window access issues
@@ -57,10 +74,23 @@ export function getApiBase() {
 
   const fromEnv = safeEnv('REACT_APP_API_BASE');
   if (fromEnv) {
-    return normalizeBase(String(fromEnv));
+    const val = String(fromEnv);
+    return /\/api\/?$/.test(val) ? normalizeBase(val) : normalizeBaseEnsureApi(val);
   }
 
   return normalizeBase(DEFAULT_BASE);
+}
+
+/**
+ * Compose a full URL from a path (with or without leading slash) using the API base.
+ * Guarantees a single slash between base and path.
+ * @param {string} path
+ * @returns {string}
+ */
+function withBase(path) {
+  const base = getApiBase();
+  const clean = String(path).replace(/^\/+/, '');
+  return `${base}/${clean}`;
 }
 
 /**
@@ -72,12 +102,18 @@ export function getApiBase() {
   // eslint-disable-next-line no-console
   console.info('[api/client] Resolved API_BASE =', base);
   try {
-    const res = await fetch(`${base}/health`, { method: 'GET' });
+    const res = await fetch(withBase('/health'), { method: 'GET' });
     // eslint-disable-next-line no-console
     console.info('[api/client] Health check', res.ok ? 'OK' : `FAILED (${res.status})`);
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error('[api/client] Health check failed to fetch:', err?.message || err);
+    // If this is a TypeError from CORS/origin mismatch, surface guidance
+    if (err && (err.name === 'TypeError' || err.code === 'NETWORK_ERROR')) {
+      console.error(
+        '[api/client] Hint: If frontend and backend are on different origins, set window.__API_BASE__ to the exact backend origin (including protocol and port), e.g.: window.__API_BASE__="https://your-host:3001/api". Also verify CORS on backend allows this frontend origin.'
+      );
+    }
   }
 })();
 
@@ -85,6 +121,7 @@ export function getApiBase() {
  * Centralized JSON fetch with better network error surfacing.
  * Ensures JSON content-type by default and parses response body.
  * Converts network errors into a standardized Error with .code = 'NETWORK_ERROR'.
+ * Surfaces HTTP errors distinctly with .status and .data.
  */
 async function doJson(url, options = {}) {
   const merged = {
@@ -111,10 +148,12 @@ async function doJson(url, options = {}) {
   const data = isJson ? await res.json().catch(() => ({})) : await res.text();
 
   if (!res.ok) {
-    const message = isJson && data && data.error ? data.error : res.statusText;
-    const error = new Error(message || 'Request failed');
+    const message =
+      (isJson && data && (data.error || data.message)) || res.statusText || 'Request failed';
+    const error = new Error(message);
     error.status = res.status;
     error.data = data;
+    error.code = 'HTTP_ERROR';
     throw error;
   }
   return data;
@@ -128,7 +167,7 @@ export async function apiStartGame(playerName) {
    * @returns {Promise<{session_id:string, word_length:number, max_attempts:number}>}
    */
   const body = playerName ? { player_name: String(playerName) } : {};
-  return doJson(`${getApiBase()}/start-game`, {
+  return doJson(withBase('/start-game'), {
     method: 'POST',
     body: JSON.stringify(body),
   });
@@ -142,7 +181,7 @@ export async function apiSubmitGuess(sessionId, guess) {
    * @param {string} guess
    * @returns {Promise<{feedback:Array<'correct'|'present'|'absent'>, attempts:number, max_attempts:number, status:string}>}
    */
-  return doJson(`${getApiBase()}/guess`, {
+  return doJson(withBase('/guess'), {
     method: 'POST',
     body: JSON.stringify({ session_id: String(sessionId), guess: String(guess) }),
   });
@@ -155,7 +194,7 @@ export async function apiGetSession(sessionId) {
    * @param {string} sessionId
    * @returns {Promise<any>}
    */
-  return doJson(`${getApiBase()}/session/${encodeURIComponent(sessionId)}`, {
+  return doJson(withBase(`/session/${encodeURIComponent(sessionId)}`), {
     method: 'GET',
   });
 }
@@ -166,7 +205,7 @@ export async function apiGetLeaderboard() {
    * Gets leaderboard entries.
    * @returns {Promise<Array<{player_name:string, attempts:number, duration:number, finished_at:string}>>}
    */
-  return doJson(`${getApiBase()}/leaderboard`, {
+  return doJson(withBase('/leaderboard'), {
     method: 'GET',
   });
 }
