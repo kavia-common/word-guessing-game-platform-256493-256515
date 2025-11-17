@@ -102,30 +102,44 @@ function withBase(path) {
   // eslint-disable-next-line no-console
   console.info('[api/client] Resolved API_BASE =', base);
 
-  // Probe /health then fallback to /health/ since backend exposes /api/health/
+  // Probe both /health and /health/ to handle backends requiring trailing slashes (Django default)
   const url1 = withBase('/health');
   const url2 = withBase('/health/');
   try {
     // eslint-disable-next-line no-console
-    console.info('[api/client] Probing health:', url1);
+    console.info('[api/client] Probing health (no slash):', url1);
     let res = await fetch(url1, { method: 'GET' });
 
     if (!res.ok) {
       // eslint-disable-next-line no-console
-      console.warn(`[api/client] Health check first attempt FAILED (${res.status}). Retrying: ${url2}`);
+      console.warn(`[api/client] Health (no slash) returned ${res.status}. Retrying with trailing slash: ${url2}`);
       const res2 = await fetch(url2, { method: 'GET' });
       res = res2;
     }
 
     // eslint-disable-next-line no-console
-    console.info('[api/client] Health check', res.ok ? `OK (${res.status})` : `FAILED (${res.status})`);
+    console.info('[api/client] Health check result:', res.ok ? `OK (${res.status})` : `FAILED (${res.status})`);
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error('[api/client] Health check failed to fetch:', err?.message || err);
     // If this is a TypeError from CORS/origin mismatch, surface guidance with explicit base
     if (err && (err.name === 'TypeError' || err.code === 'NETWORK_ERROR')) {
+      const frontendOrigin = (typeof window !== 'undefined' && window.location)
+        ? `${window.location.protocol}//${window.location.host}`
+        : '(frontend-origin)';
       console.error(
-        `[api/client] Hint: If frontend and backend are on different origins, define window.__API_BASE__ before the app bundle loads to the exact backend origin INCLUDING /api.\nExample:\n  <script>\n    window.__API_BASE__ = "${base || 'https://your-host:3001/api'}";\n  </script>\nAlso verify CORS on the backend allows this frontend origin.`
+        `[api/client] CORS/Origin hint:
+- Frontend origin: ${frontendOrigin}
+- API base (target): ${base}
+If these differ, ensure:
+1) Set window.__API_BASE__ to the EXACT backend origin INCLUDING port and /api before loading the app bundle.
+   Example:
+   <script>
+     window.__API_BASE__ = "https://vscode-internal-13306-beta.beta01.cloud.kavia.ai:3001/api";
+   </script>
+2) On the Django backend, CORS_ALLOWED_ORIGINS must include the exact frontend origin:
+   "${frontendOrigin}"
+3) Backend health endpoint exists at /api/health/ (note trailing slash).`
       );
     }
   }
