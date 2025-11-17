@@ -1,37 +1,29 @@
 (function () {
+  // PUBLIC_INTERFACE
   /**
    * Runtime configuration for the frontend.
-   * This file is loaded by index.html before the React bundle.
-   * It allows setting deployment-specific values without rebuilding.
+   * You can override API base and Supabase settings without rebuilding.
+   * Set window.__API_BASE__ to your backend origin INCLUDING /api.
+   * Example:
+   *   window.__API_BASE__ = "https://your-backend.example.com:3001/api";
    *
-   * IMPORTANT:
-   * - Use the exact backend origin and include "/api" for API base.
-   * - Ensure protocol (https) matches the frontend to avoid mixed-content.
-   * - If you change the backend host/port, update it here.
-   *
-   * You can also set Supabase config here if using authentication:
+   * For Supabase (optional):
    *   window.__SUPABASE_URL__ = "https://your-project.supabase.co";
-   *   window.__SUPABASE_ANON_KEY__ = "your-public-anon-key";
-   *   window.__SITE_URL__ = window.location.origin; // used for email redirect
+   *   window.__SUPABASE_ANON_KEY__ = "<public-anon-key>";
+   *   window.__SITE_URL__ = window.location.origin;
    */
-
   try {
-    var frontendOrigin = window.location.protocol + '//' + window.location.host;
+    // If not set by operator, leave undefined and the app will fall back to env/defaults.
+    // window.__API_BASE__ = "https://vscode-internal-13306-beta.beta01.cloud.kavia.ai:3001/api";
+    // window.__SUPABASE_URL__ = "";
+    // window.__SUPABASE_ANON_KEY__ = "";
+    // window.__SITE_URL__ = window.location.origin;
 
-    // Set the API base to the running backend's HTTPS origin and include /api
-    // Adjust host/port if backend changes in your environment.
-    window.__API_BASE__ = "https://vscode-internal-13306-beta.beta01.cloud.kavia.ai:3001/api";
-
-    // Optional: set the SITE URL for auth redirects if Supabase is used.
-    window.__SITE_URL__ = frontendOrigin;
-
+    // Log current runtime values for easier diagnostics.
     // eslint-disable-next-line no-console
-    console.info(
-      "[runtime-config] Frontend origin =", frontendOrigin,
-      "| API_BASE =", window.__API_BASE__ || "(unset)"
-    );
+    console.info("[runtime-config] frontend origin =", window.location.origin, "| __API_BASE__ =", window.__API_BASE__ || "(unset)");
   } catch (e) {
     // eslint-disable-next-line no-console
-    console.warn("[runtime-config] Unable to set runtime variables:", e && e.message ? e.message : e);
+    console.warn("[runtime-config] Unable to read window/location:", e?.message || e);
   }
 })();

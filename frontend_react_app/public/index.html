@@ -1,15 +1,21 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#8a1e2e" />
+    <meta
+      name="description"
+      content="Word Guessing Game - React frontend"
+    />
     <title>Word Guess</title>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
-    <!-- Load runtime config BEFORE the app bundle so window.__API_BASE__ is available -->
+    <!-- Load runtime config BEFORE the app bundle to expose window.__API_BASE__ etc. -->
     <script src="%PUBLIC_URL%/runtime-config.js"></script>
+    <!-- CRA will inject the app bundle scripts here -->
   </body>
 </html>

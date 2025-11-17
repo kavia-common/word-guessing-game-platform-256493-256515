@@ -85,6 +85,22 @@ export function getApiBase() {
 function withBase(path) {
   const base = getApiBase();
   const clean = String(path).replace(/^\/+/, '');
+  // Mixed content guardrail (log only): if frontend is HTTPS and API_BASE is not HTTPS, warn.
+  try {
+    if (typeof window !== 'undefined' && window.location) {
+      const isFrontendHttps = window.location.protocol === 'https:';
+      const baseUrl = new URL(base);
+      if (isFrontendHttps && baseUrl.protocol !== 'https:') {
+        // eslint-disable-next-line no-console
+        console.warn('[api/client] Mixed-content risk: Frontend is HTTPS but API_BASE is not HTTPS.', {
+          frontend: `${window.location.protocol}//${window.location.host}`,
+          apiBase: base,
+        });
+      }
+    }
+  } catch (_) {
+    // ignore URL parsing issues
+  }
   return `${base}/${clean}`;
 }
 

@@ -15,13 +15,26 @@ export default function Diagnostics() {
       urlSlash: { url: '', ok: null, status: null, error: '' },
     },
   });
+  const [resolved, setResolved] = useState({
+    frontendOrigin: '',
+    healthNoSlash: '',
+    healthSlash: '',
+  });
 
   useEffect(() => {
     const base = getApiBase();
     setApiBase(base);
+
+    const frontendOrigin =
+      typeof window !== 'undefined' && window.location
+        ? `${window.location.protocol}//${window.location.host}`
+        : '';
+
+    const url1 = `${base}/health`;
+    const url2 = `${base}/health/`;
+    setResolved({ frontendOrigin, healthNoSlash: url1, healthSlash: url2 });
+
     (async () => {
-      const url1 = `${base}/health`;
-      const url2 = `${base}/health/`;
       setProbe({
         status: 'loading',
         message: 'Probing /health and /health/…',
@@ -84,7 +97,7 @@ export default function Diagnostics() {
                 url: url1,
                 ok: res1 ? res1.ok : false,
                 status: res1 ? res1.status : null,
-                error: res1 && !res1.ok ? `HTTP ${res1.status}` : (res1 ? '' : ('')),
+                error: res1 && !res1.ok ? `HTTP ${res1.status}` : (res1 ? '' : (''))
               },
               urlSlash: { url: url2, ok: true, status: res2.status, error: '' },
             },
@@ -111,7 +124,7 @@ export default function Diagnostics() {
     })();
   }, []);
 
-  const fOrigin = typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.host}` : '-';
+  const fOrigin = resolved.frontendOrigin || (typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.host}` : '-');
 
   return (
     <section className="card">
@@ -121,6 +134,11 @@ export default function Diagnostics() {
       <div className="meta">
         <span>Resolved API base: <strong>{apiBase || '-'}</strong></span>
         <span>Frontend origin: <strong>{fOrigin}</strong></span>
+      </div>
+
+      <div className="meta" style={{ marginTop: 8 }}>
+        <span>GET: <code>{resolved.healthNoSlash || '-'}</code></span>
+        <span>GET: <code>{resolved.healthSlash || '-'}</code></span>
       </div>
 
       {probe.status === 'loading' && <div className="skeleton">Checking health…</div>}
